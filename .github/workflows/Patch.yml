@@ -1,0 +1,168 @@
+name: Patch Apps
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
+
+jobs:
+  Patch-apps:
+    environment: SECRET_ENV
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            YTMusic-patch.json
+            ytmversion.py
+          sparse-checkout-cone-mode: false
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      
+      - name: Install dependencies
+        run: |
+          pip install requests
+          sudo apt-get update
+          sudo apt-get install -y jq curl wget
+      
+      - name: Download Apkeep
+        run: |
+          wget https://github.com/EFForg/apkeep/releases/latest/download/apkeep-x86_64-unknown-linux-gnu -O apkeep
+          chmod +x apkeep
+          sudo mv apkeep /usr/local/bin/
+
+      - name: Download RVX Patches
+        run: |
+          PATCHES_URL=$(curl -s https://api.github.com/repos/inotia00/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".rvp")) | .browser_download_url')
+          PATCHES_VERSION=$(curl -s https://api.github.com/repos/inotia00/revanced-patches/releases/latest | jq -r '.tag_name' | sed 's/v//')
+          wget "$PATCHES_URL" -O patches.rvp
+          echo "PATCHES_VERSION=$PATCHES_VERSION" >> $GITHUB_ENV
+      
+      - name: Download Revanced CLI
+        run: |
+          CLI_URL=$(curl -s https://api.github.com/repos/inotia00/revanced-cli/releases/latest | jq -r '.assets[] | select(.name | endswith("-all.jar")) | .browser_download_url')
+          CLI_VERSION=$(curl -s https://api.github.com/repos/inotia00/revanced-cli/releases/latest | jq -r '.tag_name' | sed 's/v//')
+          wget "$CLI_URL" -O revanced-cli.jar
+          echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
+      
+      - name: Download Keystore
+        run: |
+          curl -L -H "Authorization: token ${{ secrets.KEYSTORE_ACCESS_TOKEN }}" \
+               -H "Accept: application/vnd.github.v3.raw" \
+               -o SenyxPatch.keystore \
+               https://api.github.com/repos/SenyxLois/Keystore/contents/SenyxPatch.keystore
+          
+          if [ ! -f SenyxPatch.keystore ]; then
+            echo "ERROR: Failed to download keystore"
+            exit 1
+          fi
+          
+          # Verify keystore file size (should not be empty or too small)
+          KEYSTORE_SIZE=$(stat -c%s SenyxPatch.keystore)
+          if [ "$KEYSTORE_SIZE" -lt 100 ]; then
+            echo "ERROR: Keystore file is too small ($KEYSTORE_SIZE bytes). Possible download issue."
+            exit 1
+          fi
+      
+      - name: Find compatible YT Music version
+        id: find_version
+        run: |
+          python3 ytmversion.py
+      
+      - name: Download YouTube Music APK
+        run: |
+          echo "Downloading YouTube Music version ${{ env.YT_MUSIC_VERSION }}"
+          apkeep -a com.google.android.apps.youtube.music@${{ env.YT_MUSIC_VERSION }} .
+          
+          # Find the downloaded file
+          APK_FILE=$(ls com.google.android.apps.youtube.music*.apk 2>/dev/null || ls com.google.android.apps.youtube.music*.apks 2>/dev/null || ls com.google.android.apps.youtube.music*.apkm 2>/dev/null || echo "")
+          
+          if [ -z "$APK_FILE" ]; then
+            echo "ERROR: APK file not found"
+            exit 1
+          fi
+          
+          # Check if it's .apks or .apkm (not supported yet)
+          if [[ "$APK_FILE" == *.apks ]] || [[ "$APK_FILE" == *.apkm ]]; then
+            echo "ERROR: .apks and .apkm formats are under construction"
+            exit 1
+          fi
+          
+          # Rename to standard format if needed
+          if [ "$APK_FILE" != "youtube_music.apk" ]; then
+            mv "$APK_FILE" youtube_music.apk
+          fi
+          
+          echo "APK_FILE=youtube_music.apk" >> $GITHUB_ENV
+      
+      - name: Patch YouTube Music APK
+        run: |
+          OUTPUT_APK="ytmusic_${{ env.YT_MUSIC_VERSION }}_rvx${{ env.PATCHES_VERSION }}.apk"
+          
+          # Build patch arguments properly
+          PATCH_ARGS=""
+          while IFS= read -r patch; do
+            PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
+          done < enabled_patches.txt
+          
+          eval java -jar revanced-cli.jar patch \
+            -p patches.rvp \
+            youtube_music.apk \
+            --exclusive \
+            $PATCH_ARGS \
+            --keystore SenyxPatch.keystore \
+            --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
+            --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
+            --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
+            -o \"$OUTPUT_APK\"
+          
+          echo "OUTPUT_APK=$OUTPUT_APK" >> $GITHUB_ENV
+
+      - name: Get Tool Versions
+        run: |
+          echo "BUILD_DATE=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
+          # Get Apkeep version
+          APKEEP_VERSION=$(apkeep --version 2>&1 | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
+          echo "APKEEP_VERSION=$APKEEP_VERSION" >> $GITHUB_ENV
+          
+          # APKEditor is not used in this workflow, set as N/A
+          echo "APKEDITOR_VERSION=N/A" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.PATCHES_VERSION }}
+          name: RVX ${{ env.PATCHES_VERSION }} patched apk
+          body: |
+            <small>If you want to know what patch is enabled read enabled_patches.txt!</small>
+            <small>To use these google apps you need to have [MicroG](https://github.com/WSTxda/MicroG-RE/releases) installed!</small>
+
+            ## <img width="25" height="25" alt="image" src="https://github.com/user-attachments/assets/a16f7276-d144-4ea2-9ca1-f071d8a61309" /> YouTube Music Patched APK
+            
+            - **YT Music Version:** ${{ env.YT_MUSIC_VERSION }}
+            - **RVX Patches Version:** ${{ env.PATCHES_VERSION }}
+
+            ### 🛠️ Tool Used 
+            - **Revanced-cli:** ${{ env.CLI_VERSION }}
+            - **Apkeep :** ${{ env.APKEEP_VERSION }}
+            - **Build Date:** ${{ env.BUILD_DATE }}
+
+          files: ${{ env.OUTPUT_APK }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

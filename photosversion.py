@@ -10,6 +10,12 @@ def load_enabled_patches(filepath='GooglePhotos-patch.json'):
         with open(filepath, 'r') as f:
             data = json.load(f)
         
+        # Universal patches that apply to all packages, ignore them for version compatibility
+        universal_patches = {
+            "Enable ROM signature spoofing",
+            "Disable Sentry telemetry"
+        }
+        
         # Handle different formats
         enabled_patch_names = []
         
@@ -17,20 +23,22 @@ def load_enabled_patches(filepath='GooglePhotos-patch.json'):
             # Check if it's a list of strings or objects
             if data and isinstance(data[0], str):
                 # List of patch names
-                enabled_patch_names = data
-                print(f"Loaded {len(enabled_patch_names)} patch names from {filepath}")
+                enabled_patch_names = [p for p in data if p not in universal_patches]
+                print(f"Loaded {len(enabled_patch_names)} patch names from {filepath} (ignoring {len([p for p in data if p in universal_patches])} universal patches)")
             elif data and isinstance(data[0], dict):
                 # List of patch objects
                 for patch in data:
                     if patch.get("use", False):
-                        compat_packages = patch.get("compatiblePackages", {})
-                        # Check if this patch supports Google Photos
-                        if "com.google.android.apps.photos" in compat_packages:
-                            enabled_patch_names.append(patch.get("name"))
+                        patch_name = patch.get("name")
+                        if patch_name not in universal_patches:
+                            compat_packages = patch.get("compatiblePackages", {})
+                            # Check if this patch supports Google Photos
+                            if "com.google.android.apps.photos" in compat_packages:
+                                enabled_patch_names.append(patch_name)
                 print(f"Loaded {len(enabled_patch_names)} enabled Google Photos patches from {filepath}")
         elif isinstance(data, dict):
             # Might be a dict with patch names as keys
-            enabled_patch_names = list(data.keys())
+            enabled_patch_names = [k for k in data.keys() if k not in universal_patches]
             print(f"Loaded {len(enabled_patch_names)} patch names from {filepath}")
         
         if not enabled_patch_names:

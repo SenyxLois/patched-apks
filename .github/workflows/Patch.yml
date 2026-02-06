@@ -152,6 +152,8 @@ jobs:
           if [ "${{ env.GOOGLE_PHOTOS_USE_LATEST }}" = "true" ]; then
             echo "Downloading latest Google Photos APK"
             apkeep -a com.google.android.apps.photos .
+            echo "this is the current file structure"
+            ls
           else
             echo "Downloading Google Photos version ${{ env.GOOGLE_PHOTOS_VERSION }}"
             apkeep -a com.google.android.apps.photos@${{ env.GOOGLE_PHOTOS_VERSION }} .

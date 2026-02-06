@@ -155,6 +155,7 @@ jobs:
           else
             echo "Downloading Google Photos version ${{ env.GOOGLE_PHOTOS_VERSION }}"
             apkeep -a com.google.android.apps.photos@${{ env.GOOGLE_PHOTOS_VERSION }} .
+            echo "this is the current file structure"
             ls
           fi
           

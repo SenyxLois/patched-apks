@@ -117,8 +117,13 @@ jobs:
       - name: Download YouTube Music APK
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
-          echo "Downloading YouTube Music version ${{ env.YT_MUSIC_VERSION }}"
-          apkeep -a com.google.android.apps.youtube.music@${{ env.YT_MUSIC_VERSION }} .
+          if [ "${{ env.YT_MUSIC_USE_LATEST }}" = "true" ]; then
+            echo "Downloading latest YouTube Music APK"
+            apkeep -a com.google.android.apps.youtube.music .
+          else
+            echo "Downloading YouTube Music version ${{ env.YT_MUSIC_VERSION }}"
+            apkeep -a com.google.android.apps.youtube.music@${{ env.YT_MUSIC_VERSION }} .
+          fi
           
           # Find the downloaded file
           APK_FILE=$(ls com.google.android.apps.youtube.music*.apk 2>/dev/null || ls com.google.android.apps.youtube.music*.apks 2>/dev/null || ls com.google.android.apps.youtube.music*.apkm 2>/dev/null || echo "")
@@ -144,8 +149,13 @@ jobs:
       - name: Download Google Photos APK
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
-          echo "Downloading Google Photos version ${{ env.GOOGLE_PHOTOS_VERSION }}"
-          apkeep -a com.google.android.apps.photos@${{ env.GOOGLE_PHOTOS_VERSION }} .
+          if [ "${{ env.GOOGLE_PHOTOS_USE_LATEST }}" = "true" ]; then
+            echo "Downloading latest Google Photos APK"
+            apkeep -a com.google.android.apps.photos .
+          else
+            echo "Downloading Google Photos version ${{ env.GOOGLE_PHOTOS_VERSION }}"
+            apkeep -a com.google.android.apps.photos@${{ env.GOOGLE_PHOTOS_VERSION }} .
+          fi
           
           # Find the downloaded file
           APK_FILE=$(ls com.google.android.apps.photos*.apk 2>/dev/null || ls com.google.android.apps.photos*.apks 2>/dev/null || ls com.google.android.apps.photos*.apkm 2>/dev/null || echo "")

@@ -63,6 +63,7 @@ def fetch_patches_data(url="https://api.revanced.app/v4/patches/list"):
 def find_compatible_version(patches_data, enabled_patches, target_package="com.google.android.apps.photos"):
     version_support = defaultdict(int)
     patch_details = {}
+    supports_all_versions = True
     
     print(f"\nSearching for compatible versions of {target_package}...")
     
@@ -78,6 +79,7 @@ def find_compatible_version(patches_data, enabled_patches, target_package="com.g
                 if versions:
                     print(f"  - {patch_name}: supports versions {versions}")
                     patch_details[patch_name] = versions
+                    supports_all_versions = False
                     for version in versions:
                         version_support[version] += 1
                 elif target_package in compat_packages:
@@ -98,10 +100,16 @@ def find_compatible_version(patches_data, enabled_patches, target_package="com.g
                         if versions:
                             print(f"  - {patch_name}: supports versions {versions}")
                             patch_details[patch_name] = versions
+                            supports_all_versions = False
                             for version in versions:
                                 version_support[version] += 1
                         else:
                             print(f"  - {patch_name}: supports all versions")
+    
+    # If all patches support all versions, no need to check compatibility
+    if supports_all_versions:
+        print("\n✓ All enabled patches support all versions. Will use latest APK.")
+        return None
     
     if not version_support:
         print("\nERROR: No version information found for any enabled patches")
@@ -143,10 +151,18 @@ def save_outputs(version, enabled_patches):
     github_env = os.environ.get('GITHUB_ENV')
     if github_env:
         with open(github_env, 'a') as f:
-            f.write(f"GOOGLE_PHOTOS_VERSION={version}\n")
-        print(f"\n✓ Saved GOOGLE_PHOTOS_VERSION={version} to GitHub environment")
+            if version is None:
+                f.write(f"GOOGLE_PHOTOS_USE_LATEST=true\n")
+                print(f"\n✓ Set GOOGLE_PHOTOS_USE_LATEST=true for latest version download")
+            else:
+                f.write(f"GOOGLE_PHOTOS_VERSION={version}\n")
+                f.write(f"GOOGLE_PHOTOS_USE_LATEST=false\n")
+                print(f"\n✓ Saved GOOGLE_PHOTOS_VERSION={version} to GitHub environment")
     else:
-        print(f"\nGOOGLE_PHOTOS_VERSION={version}")
+        if version is None:
+            print(f"\nGOOGLE_PHOTOS_USE_LATEST=true")
+        else:
+            print(f"\nGOOGLE_PHOTOS_VERSION={version}")
 
 def main():    
     # Load enabled patches

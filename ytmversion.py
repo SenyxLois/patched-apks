@@ -152,6 +152,7 @@ def save_outputs(version, enabled_patches):
     if github_env:
         with open(github_env, 'a') as f:
             if version is None:
+                f.write(f"YT_MUSIC_VERSION=\n")
                 f.write(f"YT_MUSIC_USE_LATEST=true\n")
                 print(f"\n✓ Set YT_MUSIC_USE_LATEST=true for latest version download")
             else:

@@ -58,6 +58,17 @@ jobs:
           chmod +x apkeep
           sudo mv apkeep /usr/local/bin/
 
+      - name: Download APKEditor
+        if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          APK_EDITOR_URL=$(curl -s https://api.github.com/repos/REAndroid/APKEditor/releases/latest | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -1)
+          if [ -z "$APK_EDITOR_URL" ]; then
+            echo "ERROR: Could not find APKEditor jar"
+            exit 1
+          fi
+          wget "$APK_EDITOR_URL" -O apk-editor.jar
+          chmod +x apk-editor.jar
+
       - name: Download RVX Patches
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
@@ -152,35 +163,85 @@ jobs:
           if [ "${{ env.GOOGLE_PHOTOS_USE_LATEST }}" = "true" ]; then
             echo "Downloading latest Google Photos APK"
             apkeep -a com.google.android.apps.photos .
-            echo "this is the current file structure"
-            ls
           else
             echo "Downloading Google Photos version ${{ env.GOOGLE_PHOTOS_VERSION }}"
             apkeep -a com.google.android.apps.photos@${{ env.GOOGLE_PHOTOS_VERSION }} .
-            echo "this is the current file structure"
-            ls
           fi
           
-          # Find the downloaded file
-          APK_FILE=$(ls com.google.android.apps.photos.apk 2>/dev/null || ls com.google.android.apps.photos*.apk 2>/dev/null || ls com.google.android.apps.photos*.apks 2>/dev/null || ls com.google.android.apps.photos*.apkm 2>/dev/null || echo "")
+          echo "Downloaded files:"
+          ls -la
           
-          if [ -z "$APK_FILE" ]; then
-            echo "ERROR: APK file not found"
+          # Check for XAPK file
+          XAPK_FILE=$(ls com.google.android.apps.photos*.xapk 2>/dev/null || echo "")
+          
+          if [ -n "$XAPK_FILE" ]; then
+            echo "Found XAPK file: $XAPK_FILE"
+            mkdir -p xapk_extract
+            cd xapk_extract
+            
+            # XAPK is a ZIP file, extract it
+            unzip -q "../$XAPK_FILE"
+            echo "Extracted XAPK contents:"
+            ls -la
+            
+            # Find and copy v8a and v7a splits
+            if [ -f "splits/config.arm64_v8a.apk" ] && [ -f "splits/config.armeabi_v7a.apk" ]; then
+              echo "Found both v8a and v7a splits"
+              cp "splits/config.arm64_v8a.apk" "../google_photos_v8a.apk"
+              cp "splits/config.armeabi_v7a.apk" "../google_photos_v7a.apk"
+              echo "Copied split APKs"
+            elif [ -f "base.apk" ]; then
+              echo "Using base.apk from XAPK"
+              cp "base.apk" "../google_photos.apk"
+            else
+              echo "ERROR: Could not find suitable APK in XAPK"
+              ls -la
+              exit 1
+            fi
+            
+            cd ..
+            rm -rf xapk_extract
+          else
+            echo "No XAPK found, checking for standard APK files"
+            APK_FILE=$(ls com.google.android.apps.photos*.apk 2>/dev/null || ls com.google.android.apps.photos*.apks 2>/dev/null || ls com.google.android.apps.photos*.apkm 2>/dev/null || echo "")
+            
+            if [ -z "$APK_FILE" ]; then
+              echo "ERROR: APK file not found"
+              exit 1
+            fi
+            
+            # Check if it's .apks or .apkm format
+            if [[ "$APK_FILE" == *.apks ]] || [[ "$APK_FILE" == *.apkm ]]; then
+              echo "Found $APK_FILE - using APKEditor to split"
+              mkdir -p apk_work
+              java -jar apk-editor.jar d -i "$APK_FILE" -o apk_work
+              
+              # Try to find arm64-v8a and armeabi-v7a from splits
+              if [ -d "apk_work/splits" ]; then
+                find apk_work/splits -name "*arm64*v8a*.apk" -exec cp {} google_photos_v8a.apk \;
+                find apk_work/splits -name "*armeabi*v7a*.apk" -exec cp {} google_photos_v7a.apk \;
+              fi
+              rm -rf apk_work
+            else
+              # Standard APK file
+              if [ "$APK_FILE" != "google_photos.apk" ]; then
+                mv "$APK_FILE" google_photos.apk
+              fi
+            fi
+          fi
+          
+          # Determine which APK files we have
+          if [ -f "google_photos_v8a.apk" ] && [ -f "google_photos_v7a.apk" ]; then
+            echo "GOOGLE_PHOTOS_APK=google_photos_v8a.apk" >> $GITHUB_ENV
+            echo "GOOGLE_PHOTOS_APK_V7A=google_photos_v7a.apk" >> $GITHUB_ENV
+            echo "Using split APKs (v8a and v7a)"
+          elif [ -f "google_photos.apk" ]; then
+            echo "GOOGLE_PHOTOS_APK=google_photos.apk" >> $GITHUB_ENV
+            echo "Using single APK"
+          else
+            echo "ERROR: No suitable APK files found"
             exit 1
           fi
-          
-          # Check if it's .apks or .apkm (not supported yet)
-          if [[ "$APK_FILE" == *.apks ]] || [[ "$APK_FILE" == *.apkm ]]; then
-            echo "ERROR: .apks and .apkm formats are under construction"
-            exit 1
-          fi
-          
-          # Rename to standard format if needed
-          if [ "$APK_FILE" != "google_photos.apk" ]; then
-            mv "$APK_FILE" google_photos.apk
-          fi
-          
-          echo "GOOGLE_PHOTOS_APK=google_photos.apk" >> $GITHUB_ENV
       
       - name: Patch YouTube Music APK
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
@@ -217,18 +278,51 @@ jobs:
             PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
           done < enabled_patches_photos.txt
           
-          eval java -jar revanced-cli.jar patch \
-            -p patches-revanced.rvp \
-            google_photos.apk \
-            --exclusive \
-            $PATCH_ARGS \
-            --keystore SenyxPatch.keystore \
-            --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
-            --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
-            --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
-            -o \"$OUTPUT_PHOTOS_APK\"
-          
-          echo "OUTPUT_PHOTOS_APK=$OUTPUT_PHOTOS_APK" >> $GITHUB_ENV
+          # Check if we have split APKs (v8a and v7a)
+          if [ -f "google_photos_v8a.apk" ] && [ -f "google_photos_v7a.apk" ]; then
+            echo "Patching split APKs (v8a and v7a)"
+            
+            # Patch v8a
+            eval java -jar revanced-cli.jar patch \
+              -p patches-revanced.rvp \
+              google_photos_v8a.apk \
+              --exclusive \
+              $PATCH_ARGS \
+              --keystore SenyxPatch.keystore \
+              --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
+              --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
+              --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
+              -o \"photos_v8a_${{ env.GOOGLE_PHOTOS_VERSION }}_revanced${{ env.REVANCED_PATCHES_VERSION }}.apk\"
+            
+            # Patch v7a
+            eval java -jar revanced-cli.jar patch \
+              -p patches-revanced.rvp \
+              google_photos_v7a.apk \
+              --exclusive \
+              $PATCH_ARGS \
+              --keystore SenyxPatch.keystore \
+              --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
+              --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
+              --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
+              -o \"photos_v7a_${{ env.GOOGLE_PHOTOS_VERSION }}_revanced${{ env.REVANCED_PATCHES_VERSION }}.apk\"
+            
+            echo "OUTPUT_PHOTOS_APK=photos_v8a_${{ env.GOOGLE_PHOTOS_VERSION }}_revanced${{ env.REVANCED_PATCHES_VERSION }}.apk\" >> $GITHUB_ENV
+            echo \"OUTPUT_PHOTOS_APK_V7A=photos_v7a_${{ env.GOOGLE_PHOTOS_VERSION }}_revanced${{ env.REVANCED_PATCHES_VERSION }}.apk\" >> $GITHUB_ENV
+          else
+            echo "Patching single APK"
+            eval java -jar revanced-cli.jar patch \
+              -p patches-revanced.rvp \
+              google_photos.apk \
+              --exclusive \
+              $PATCH_ARGS \
+              --keystore SenyxPatch.keystore \
+              --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
+              --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
+              --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
+              -o \"$OUTPUT_PHOTOS_APK\"
+            
+            echo "OUTPUT_PHOTOS_APK=$OUTPUT_PHOTOS_APK" >> $GITHUB_ENV
+          fi
 
       - name: Get Tool Versions
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
@@ -270,6 +364,7 @@ jobs:
           files: |
             ${{ env.OUTPUT_APK }}
             ${{ env.OUTPUT_PHOTOS_APK }}
+            ${{ env.OUTPUT_PHOTOS_APK_V7A }}
           draft: false
           prerelease: false
         env:

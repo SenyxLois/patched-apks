@@ -205,16 +205,13 @@ jobs:
             
             # Check if it's .apks or .apkm format
             if [[ "$APK_FILE" == *.apks ]] || [[ "$APK_FILE" == *.apkm ]]; then
-              echo "Found $APK_FILE - using APKEditor to split"
-              mkdir -p apk_work
-              java -jar apk-editor.jar d -i "$APK_FILE" -o apk_work
+              echo "Found $APK_FILE - using APKEditor to merge"
+              java -jar apk-editor.jar m -i "$APK_FILE" -o google_photos.apk
               
-              # Try to find arm64-v8a and armeabi-v7a from splits
-              if [ -d "apk_work/splits" ]; then
-                find apk_work/splits -name "*arm64*v8a*.apk" -exec cp {} google_photos_v8a.apk \;
-                find apk_work/splits -name "*armeabi*v7a*.apk" -exec cp {} google_photos_v7a.apk \;
+              if [ ! -f "google_photos.apk" ]; then
+                echo "ERROR: APKEditor merge failed"
+                exit 1
               fi
-              rm -rf apk_work
             else
               # Standard APK file
               if [ "$APK_FILE" != "google_photos.apk" ]; then

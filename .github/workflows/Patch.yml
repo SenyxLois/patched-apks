@@ -171,59 +171,37 @@ jobs:
           echo "Downloaded files:"
           ls -la
           
-          # Check for XAPK file
-          XAPK_FILE=$(ls com.google.android.apps.photos*.xapk 2>/dev/null || echo "")
+          # Find the downloaded file (could be APK, XAPK, APKS, APKM, etc.)
+          APK_FILE=$(ls com.google.android.apps.photos*.apk 2>/dev/null | grep -v "config\." || ls com.google.android.apps.photos* 2>/dev/null | grep -E "\.(xapk|apks|apkm)$" || echo "")
           
-          if [ -n "$XAPK_FILE" ]; then
-            echo "Found XAPK file: $XAPK_FILE"
-            mkdir -p xapk_extract
-            cd xapk_extract
-            
-            # XAPK is a ZIP file, extract it
-            unzip -q "../$XAPK_FILE"
-            echo "Extracted XAPK contents"
-            
-            # Use the base APK from XAPK
-            if [ -f "com.google.android.apps.photos.apk" ]; then
-              echo "Found base APK, copying it"
-              cp "com.google.android.apps.photos.apk" "../google_photos.apk"
-            else
-              echo "ERROR: Could not find com.google.android.apps.photos.apk in XAPK"
-              exit 1
+          if [ -z "$APK_FILE" ]; then
+            echo "ERROR: APK file not found"
+            exit 1
+          fi
+          
+          echo "Found file: $APK_FILE"
+          
+          # Check if it's a plain APK or needs merging
+          if [[ "$APK_FILE" == *.apk ]] && [[ ! "$APK_FILE" =~ config ]]; then
+            # Plain APK file, use as-is
+            if [ "$APK_FILE" != "google_photos.apk" ]; then
+              mv "$APK_FILE" google_photos.apk
             fi
-            
-            cd ..
-            rm -rf xapk_extract
           else
-            echo "No XAPK found, checking for standard APK files"
-            APK_FILE=$(ls com.google.android.apps.photos*.apk 2>/dev/null || ls com.google.android.apps.photos*.apks 2>/dev/null || ls com.google.android.apps.photos*.apkm 2>/dev/null || echo "")
+            # XAPK, APKS, APKM, or other format - use APKEditor to merge
+            echo "Using APKEditor to merge $APK_FILE"
+            java -jar apk-editor.jar m -i "$APK_FILE" -o google_photos.apk
             
-            if [ -z "$APK_FILE" ]; then
-              echo "ERROR: APK file not found"
+            if [ ! -f "google_photos.apk" ]; then
+              echo "ERROR: APKEditor merge failed"
               exit 1
-            fi
-            
-            # Check if it's .apks or .apkm format
-            if [[ "$APK_FILE" == *.apks ]] || [[ "$APK_FILE" == *.apkm ]]; then
-              echo "Found $APK_FILE - using APKEditor to merge"
-              java -jar apk-editor.jar m -i "$APK_FILE" -o google_photos.apk
-              
-              if [ ! -f "google_photos.apk" ]; then
-                echo "ERROR: APKEditor merge failed"
-                exit 1
-              fi
-            else
-              # Standard APK file
-              if [ "$APK_FILE" != "google_photos.apk" ]; then
-                mv "$APK_FILE" google_photos.apk
-              fi
             fi
           fi
           
-          # Set the APK file to use
+          # Verify the APK file exists
           if [ -f "google_photos.apk" ]; then
             echo "GOOGLE_PHOTOS_APK=google_photos.apk" >> $GITHUB_ENV
-            echo "Using Google Photos APK"
+            echo "Using Google Photos APK: google_photos.apk"
           else
             echo "ERROR: No suitable APK file found"
             exit 1

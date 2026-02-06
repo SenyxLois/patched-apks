@@ -46,7 +46,7 @@ def load_enabled_patches(filepath='GooglePhotos-patch.json'):
         sys.exit(1)
 
 
-def fetch_patches_data(url="https://raw.githubusercontent.com/ReVanced/revanced-patches/main/patches.json"):
+def fetch_patches_data(url="https://api.revanced.app/v4/patches/list"):
     try:
         print(f"Fetching ReVanced patches data from {url}")
         response = requests.get(url, timeout=30)

@@ -158,7 +158,7 @@ jobs:
           fi
           
           # Find the downloaded file
-          APK_FILE=$(ls com.google.android.apps.photos*.apk 2>/dev/null || ls com.google.android.apps.photos*.apks 2>/dev/null || ls com.google.android.apps.photos*.apkm 2>/dev/null || echo "")
+          APK_FILE=$(ls com.google.android.apps.photos.apk 2>/dev/null || ls com.google.android.apps.photos*.apk 2>/dev/null || ls com.google.android.apps.photos*.apks 2>/dev/null || ls com.google.android.apps.photos*.apkm 2>/dev/null || echo "")
           
           if [ -z "$APK_FILE" ]; then
             echo "ERROR: APK file not found"

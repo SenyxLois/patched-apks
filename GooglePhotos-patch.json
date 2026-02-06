@@ -1,4 +1,6 @@
 [
     "GmsCore support",
-    "Spoof features"
+    "Spoof features",
+    "Enable ROM signature spoofing",
+    "Disable Sentry telemetry"
 ]

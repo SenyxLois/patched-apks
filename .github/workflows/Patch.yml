@@ -232,6 +232,26 @@ jobs:
             exit 1
           fi
       
+      - name: Extract Google Photos Version
+        if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          # Install aapt if not already available
+          if ! command -v aapt &> /dev/null; then
+            echo "Installing aapt..."
+            sudo apt-get install -y aapt
+          fi
+          
+          # Extract version from APK
+          PHOTOS_VERSION=$(aapt dump badging google_photos.apk | grep "versionName=" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          
+          if [ -z "$PHOTOS_VERSION" ]; then
+            echo "ERROR: Could not extract version from Google Photos APK"
+            exit 1
+          fi
+          
+          echo "Extracted Google Photos version: $PHOTOS_VERSION"
+          echo "GOOGLE_PHOTOS_VERSION=$PHOTOS_VERSION" >> $GITHUB_ENV
+      
       - name: Patch YouTube Music APK
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
@@ -284,6 +304,7 @@ jobs:
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           echo "BUILD_DATE=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
+          echo "TAG_NAME=rvx-${{ env.RVX_PATCHES_VERSION }}_revanced-${{ env.REVANCED_PATCHES_VERSION }}" >> $GITHUB_ENV
           # Get Apkeep version
           APKEEP_VERSION=$(apkeep --version 2>&1 | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
           echo "APKEEP_VERSION=$APKEEP_VERSION" >> $GITHUB_ENV
@@ -295,7 +316,7 @@ jobs:
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.BUILD_DATE }}
+          tag_name: ${{ env.TAG_NAME }}
           name: Senyx's Patched APK's - ${{ env.BUILD_DATE }}
           body: |
             <small>If you want to know what patch is enabled read enabled_patches.txt!</small>

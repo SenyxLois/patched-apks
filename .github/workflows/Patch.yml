@@ -239,12 +239,12 @@ jobs:
 
             ## Patched APK's
 
-            ### <img width="25" height="25" alt="image" src="https://github.com/user-attachments/assets/a16f7276-d144-4ea2-9ca1-f071d8a61309" /> YouTube Music [ RVX ]
+            ### <img width="25" height="25" alt="image" src="https://raw.githubusercontent.com/SenyxLois/patched-apks/refs/heads/main/icon/ytmicon.png" /> YouTube Music [ RVX ]
 
             - **YT Music Version:** ${{ env.YT_MUSIC_VERSION }}
             - **RVX Patch Version:** ${{ env.RVX_PATCHES_VERSION }}
 
-            ### Google Photos [ ReVanced ]
+            ### <img width="25" height="25" alt="image" src="https://raw.githubusercontent.com/SenyxLois/patched-apks/refs/heads/main/icon/gphotoicon.png" /> Google Photos [ ReVanced ]
             - **Google Photos Version:** ${{ env.GOOGLE_PHOTOS_VERSION }}
             - **ReVanced Patch version:** ${{ env.REVANCED_PATCHES_VERSION }}
 

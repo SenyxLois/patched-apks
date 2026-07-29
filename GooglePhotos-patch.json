@@ -1,6 +1,7 @@
 [
+    "AMOLED dark theme",
+    "Enable DCIM folders backup control",
+    "Fix DCIM folder classification",
     "GmsCore support",
-    "Spoof features",
-    "Enable ROM signature spoofing",
-    "Disable Sentry telemetry"
+    "Spoof features"
 ]

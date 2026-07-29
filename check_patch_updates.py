@@ -16,8 +16,8 @@ def load_version_file(filepath='patch_versions.json'):
     if not os.path.exists(filepath):
         print(f"Version file {filepath} not found. This is the first run.")
         return {
-            "rvx_patches_version": None,
-            "revanced_patches_version": None,
+            "morphe_patches_version": None,
+            "photos_patches_version": None,
             "cli_version": None,
             "last_updated": None,
             "last_release_tag": None
@@ -71,49 +71,49 @@ def check_for_updates(current_versions):
     print("Checking for Patch Updates")
     print("=" * 60)
     
-    # Check RVX Patches
-    print("\n[1/3] Checking RVX Patches (inotia00)...")
-    rvx_latest = fetch_latest_release_version("inotia00/revanced-patches")
-    rvx_version = rvx_latest['version']
+    # Check Morphe Patches (YouTube Music)
+    print("\n[1/3] Checking Morphe Patches (YouTube Music)...")
+    morphe_latest = fetch_latest_release_version("MorpheApp/morphe-patches")
+    morphe_version = morphe_latest['version']
     
-    if current_versions['rvx_patches_version'] is None:
-        print(f"  → First run: RVX patches version = {rvx_version}")
+    if current_versions['morphe_patches_version'] is None:
+        print(f"  → First run: Morphe patches version = {morphe_version}")
         updates_available = True
-    elif current_versions['rvx_patches_version'] != rvx_version:
+    elif current_versions['morphe_patches_version'] != morphe_version:
         print(f"  ✓ NEW VERSION AVAILABLE!")
-        print(f"    Current: {current_versions['rvx_patches_version']}")
-        print(f"    Latest:  {rvx_version}")
-        print(f"    Release: {rvx_latest['release_url']}")
+        print(f"    Current: {current_versions['morphe_patches_version']}")
+        print(f"    Latest:  {morphe_version}")
+        print(f"    Release: {morphe_latest['release_url']}")
         updates_available = True
     else:
-        print(f"  • Up to date: {rvx_version}")
+        print(f"  • Up to date: {morphe_version}")
     
-    new_versions['rvx_patches_version'] = rvx_version
-    new_versions['rvx_patches_updated'] = rvx_latest['published_at']
+    new_versions['morphe_patches_version'] = morphe_version
+    new_versions['morphe_patches_updated'] = morphe_latest['published_at']
     
-    # Check ReVanced Patches
-    print("\n[2/3] Checking ReVanced Patches...")
-    revanced_latest = fetch_latest_release_version("ReVanced/revanced-patches")
-    revanced_version = revanced_latest['version']
+    # Check Google Photos Patches (rushiranpise fork)
+    print("\n[2/3] Checking Google Photos Patches (rushiranpise fork)...")
+    photos_latest = fetch_latest_release_version("rushiranpise/morphe-patches")
+    photos_version = photos_latest['version']
     
-    if current_versions['revanced_patches_version'] is None:
-        print(f"  → First run: ReVanced patches version = {revanced_version}")
+    if current_versions['photos_patches_version'] is None:
+        print(f"  → First run: Google Photos patches version = {photos_version}")
         updates_available = True
-    elif current_versions['revanced_patches_version'] != revanced_version:
+    elif current_versions['photos_patches_version'] != photos_version:
         print(f"  ✓ NEW VERSION AVAILABLE!")
-        print(f"    Current: {current_versions['revanced_patches_version']}")
-        print(f"    Latest:  {revanced_version}")
-        print(f"    Release: {revanced_latest['release_url']}")
+        print(f"    Current: {current_versions['photos_patches_version']}")
+        print(f"    Latest:  {photos_version}")
+        print(f"    Release: {photos_latest['release_url']}")
         updates_available = True
     else:
-        print(f"  • Up to date: {revanced_version}")
+        print(f"  • Up to date: {photos_version}")
     
-    new_versions['revanced_patches_version'] = revanced_version
-    new_versions['revanced_patches_updated'] = revanced_latest['published_at']
+    new_versions['photos_patches_version'] = photos_version
+    new_versions['photos_patches_updated'] = photos_latest['published_at']
     
-    # Check Revanced CLI
-    print("\n[3/3] Checking Revanced CLI...")
-    cli_latest = fetch_latest_release_version("inotia00/revanced-cli")
+    # Check Morphe CLI
+    print("\n[3/3] Checking Morphe CLI...")
+    cli_latest = fetch_latest_release_version("MorpheApp/morphe-desktop")
     cli_version = cli_latest['version']
     
     if current_versions['cli_version'] is None:
@@ -143,8 +143,8 @@ def set_github_output(updates_available, new_versions):
     if github_output:
         with open(github_output, 'a') as f:
             f.write(f"UPDATES_AVAILABLE={'true' if updates_available else 'false'}\n")
-            f.write(f"RVX_PATCHES_VERSION={new_versions['rvx_patches_version']}\n")
-            f.write(f"REVANCED_PATCHES_VERSION={new_versions['revanced_patches_version']}\n")
+            f.write(f"MORPHE_PATCHES_VERSION={new_versions['morphe_patches_version']}\n")
+            f.write(f"PHOTOS_PATCHES_VERSION={new_versions['photos_patches_version']}\n")
             f.write(f"CLI_VERSION={new_versions['cli_version']}\n")
         print(f"\n✓ Set GitHub Actions output variables")
     
@@ -153,8 +153,8 @@ def set_github_output(updates_available, new_versions):
     if github_env:
         with open(github_env, 'a') as f:
             f.write(f"UPDATES_AVAILABLE={'true' if updates_available else 'false'}\n")
-            f.write(f"RVX_PATCHES_VERSION={new_versions['rvx_patches_version']}\n")
-            f.write(f"REVANCED_PATCHES_VERSION={new_versions['revanced_patches_version']}\n")
+            f.write(f"MORPHE_PATCHES_VERSION={new_versions['morphe_patches_version']}\n")
+            f.write(f"PHOTOS_PATCHES_VERSION={new_versions['photos_patches_version']}\n")
             f.write(f"CLI_VERSION={new_versions['cli_version']}\n")
 
 

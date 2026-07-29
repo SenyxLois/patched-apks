@@ -69,28 +69,28 @@ jobs:
           wget "$APK_EDITOR_URL" -O apk-editor.jar
           chmod +x apk-editor.jar
 
-      - name: Download RVX Patches
+      - name: Download Morphe Patches (YouTube Music)
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
-          PATCHES_URL=$(curl -s https://api.github.com/repos/inotia00/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".rvp")) | .browser_download_url')
-          RVX_PATCHES_VERSION=$(curl -s https://api.github.com/repos/inotia00/revanced-patches/releases/latest | jq -r '.tag_name' | sed 's/v//')
-          wget "$PATCHES_URL" -O patches-rvx.rvp
-          echo "RVX_PATCHES_VERSION=$RVX_PATCHES_VERSION" >> $GITHUB_ENV
+          PATCHES_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url')
+          MORPHE_PATCHES_VERSION=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest | jq -r '.tag_name' | sed 's/v//')
+          wget "$PATCHES_URL" -O patches-morphe.mpp
+          echo "MORPHE_PATCHES_VERSION=$MORPHE_PATCHES_VERSION" >> $GITHUB_ENV
 
-      - name: Download ReVanced Patches
+      - name: Download Google Photos Patches (Fork)
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
-          REVANCED_PATCHES_URL=$(curl -s https://api.github.com/repos/ReVanced/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".rvp")) | .browser_download_url')
-          REVANCED_PATCHES_VERSION=$(curl -s https://api.github.com/repos/ReVanced/revanced-patches/releases/latest | jq -r '.tag_name' | sed 's/v//')
-          wget "$REVANCED_PATCHES_URL" -O patches-revanced.rvp
-          echo "REVANCED_PATCHES_VERSION=$REVANCED_PATCHES_VERSION" >> $GITHUB_ENV
+          PHOTOS_PATCHES_URL=$(curl -s https://api.github.com/repos/rushiranpise/morphe-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url')
+          PHOTOS_PATCHES_VERSION=$(curl -s https://api.github.com/repos/rushiranpise/morphe-patches/releases/latest | jq -r '.tag_name' | sed 's/v//')
+          wget "$PHOTOS_PATCHES_URL" -O patches-photos.mpp
+          echo "PHOTOS_PATCHES_VERSION=$PHOTOS_PATCHES_VERSION" >> $GITHUB_ENV
 
-      - name: Download Revanced CLI
+      - name: Download Morphe CLI
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
-          CLI_URL=$(curl -s https://api.github.com/repos/inotia00/revanced-cli/releases/latest | jq -r '.assets[] | select(.name | endswith("-all.jar")) | .browser_download_url')
-          CLI_VERSION=$(curl -s https://api.github.com/repos/inotia00/revanced-cli/releases/latest | jq -r '.tag_name' | sed 's/v//')
-          wget "$CLI_URL" -O revanced-cli.jar
+          CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-desktop/releases/latest | jq -r '.assets[] | select(.name | endswith("-all.jar")) | .browser_download_url')
+          CLI_VERSION=$(curl -s https://api.github.com/repos/MorpheApp/morphe-desktop/releases/latest | jq -r '.tag_name' | sed 's/v//')
+          wget "$CLI_URL" -O morphe-cli.jar
           echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
       
       - name: Download Keystore
@@ -230,7 +230,7 @@ jobs:
       - name: Patch YouTube Music APK
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
-          OUTPUT_APK="ytmusic_${{ env.YT_MUSIC_VERSION }}_rvx${{ env.RVX_PATCHES_VERSION }}.apk"
+          OUTPUT_APK="ytmusic_${{ env.YT_MUSIC_VERSION }}_morphe${{ env.MORPHE_PATCHES_VERSION }}.apk"
           
           # Build patch arguments properly
           PATCH_ARGS=""
@@ -238,8 +238,8 @@ jobs:
             PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
           done < enabled_patches.txt
           
-          eval java -jar revanced-cli.jar patch \
-            -p patches-rvx.rvp \
+          eval java -jar morphe-cli.jar patch \
+            -p patches-morphe.mpp \
             youtube_music.apk \
             --exclusive \
             $PATCH_ARGS \
@@ -254,7 +254,7 @@ jobs:
       - name: Patch Google Photos APK
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
-          OUTPUT_PHOTOS_APK="photos_${{ env.GOOGLE_PHOTOS_VERSION }}_revanced${{ env.REVANCED_PATCHES_VERSION }}.apk"
+          OUTPUT_PHOTOS_APK="photos_${{ env.GOOGLE_PHOTOS_VERSION }}_morphe${{ env.PHOTOS_PATCHES_VERSION }}.apk"
           
           # Build patch arguments properly
           PATCH_ARGS=""
@@ -262,8 +262,8 @@ jobs:
             PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
           done < enabled_patches_photos.txt
           
-          eval java -jar revanced-cli.jar patch \
-            -p patches-revanced.rvp \
+          eval java -jar morphe-cli.jar patch \
+            -p patches-photos.mpp \
             google_photos.apk \
             --exclusive \
             $PATCH_ARGS \
@@ -279,7 +279,7 @@ jobs:
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           echo "BUILD_DATE=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
-          echo "TAG_NAME=rvx-${{ env.RVX_PATCHES_VERSION }}_revanced-${{ env.REVANCED_PATCHES_VERSION }}" >> $GITHUB_ENV
+          echo "TAG_NAME=morphe-${{ env.MORPHE_PATCHES_VERSION }}_photos-${{ env.PHOTOS_PATCHES_VERSION }}" >> $GITHUB_ENV
           # Get Apkeep version
           APKEEP_VERSION=$(apkeep --version 2>&1 | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
           echo "APKEEP_VERSION=$APKEEP_VERSION" >> $GITHUB_ENV
@@ -299,17 +299,17 @@ jobs:
 
             ## Patched APK's
 
-            ### <img width="25" height="25" alt="image" src="https://raw.githubusercontent.com/SenyxLois/patched-apks/refs/heads/main/icon/ytmicon.png" /> YouTube Music [ RVX ]
+            ### <img width="25" height="25" alt="image" src="https://raw.githubusercontent.com/SenyxLois/patched-apks/refs/heads/main/icon/ytmicon.png" /> YouTube Music [ Morphe ]
 
             - **YT Music Version:** ${{ env.YT_MUSIC_VERSION }}
-            - **RVX Patch Version:** ${{ env.RVX_PATCHES_VERSION }}
+            - **Morphe Patch Version:** ${{ env.MORPHE_PATCHES_VERSION }}
 
-            ### <img width="25" height="25" alt="image" src="https://raw.githubusercontent.com/SenyxLois/patched-apks/refs/heads/main/icon/gphotoicon.png" /> Google Photos [ ReVanced ]
+            ### <img width="25" height="25" alt="image" src="https://raw.githubusercontent.com/SenyxLois/patched-apks/refs/heads/main/icon/gphotoicon.png" /> Google Photos [ Morphe ]
             - **Google Photos Version:** ${{ env.GOOGLE_PHOTOS_VERSION }}
-            - **ReVanced Patch version:** ${{ env.REVANCED_PATCHES_VERSION }}
+            - **Google Photos Patch version:** ${{ env.PHOTOS_PATCHES_VERSION }}
 
             ## 🛠️ Tool Used 
-            - **Revanced-cli:** ${{ env.CLI_VERSION }}
+            - **Morphe CLI:** ${{ env.CLI_VERSION }}
             - **Apkeep :** ${{ env.APKEEP_VERSION }}
             - **Build Date:** ${{ env.BUILD_DATE }}
 

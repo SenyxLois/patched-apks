@@ -12,8 +12,8 @@ def load_enabled_patches(filepath='GooglePhotos-patch.json'):
         
         # Universal patches that apply to all packages, ignore them for version compatibility
         universal_patches = {
-            "Enable ROM signature spoofing",
-            "Disable Sentry telemetry"
+            "GmsCore support",
+            "Spoof features",
         }
         
         # Handle different formats
@@ -54,12 +54,16 @@ def load_enabled_patches(filepath='GooglePhotos-patch.json'):
         sys.exit(1)
 
 
-def fetch_patches_data(url="https://api.revanced.app/v4/patches/list"):
+def fetch_patches_data(url="https://github.com/rushiranpise/morphe-patches/releases/latest/download/patches-list.json"):
     try:
-        print(f"Fetching ReVanced patches data from {url}")
+        print(f"Fetching Morphe (Google Photos fork) patches data from {url}")
         response = requests.get(url, timeout=30)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        # Morphe format: {"patches": [...], "version": "..."}
+        if isinstance(data, dict) and "patches" in data:
+            return data["patches"]
+        return data
     except requests.RequestException as e:
         print(f"ERROR: Failed to fetch patches data: {e}")
         sys.exit(1)
@@ -78,11 +82,28 @@ def find_compatible_version(patches_data, enabled_patches, target_package="com.g
     for patch in patches_data:
         patch_name = patch.get("name")
         if patch_name in enabled_patches:
-            compat_packages = patch.get("compatiblePackages", {})
+            compat_packages = patch.get("compatiblePackages", [])
             
-            # Handle both list and dict formats for compatiblePackages
-            if isinstance(compat_packages, dict):
-                # New format: {"package.name": ["version1", "version2"]}
+            # Morphe format: list of objects with "packageName" and "targets" (each target has "version")
+            if isinstance(compat_packages, list):
+                for compat_package in compat_packages:
+                    if not isinstance(compat_package, dict):
+                        continue
+                    package_name = compat_package.get("packageName", "")
+                    if package_name != target_package:
+                        continue
+                    targets = compat_package.get("targets", [])
+                    versions = [t.get("version") for t in targets if isinstance(t, dict) and t.get("version")]
+                    if versions:
+                        print(f"  - {patch_name}: supports versions {versions}")
+                        patch_details[patch_name] = versions
+                        supports_all_versions = False
+                        for version in versions:
+                            version_support[version] += 1
+                    else:
+                        print(f"  - {patch_name}: supports all versions")
+            elif isinstance(compat_packages, dict):
+                # Old format: {"package.name": ["version1", "version2"]}
                 versions = compat_packages.get(target_package, [])
                 if versions:
                     print(f"  - {patch_name}: supports versions {versions}")
@@ -92,27 +113,6 @@ def find_compatible_version(patches_data, enabled_patches, target_package="com.g
                         version_support[version] += 1
                 elif target_package in compat_packages:
                     print(f"  - {patch_name}: supports all versions")
-            else:
-                # Old format: list of dicts or strings
-                for compat_package in compat_packages:
-                    if isinstance(compat_package, str):
-                        package_name = compat_package
-                        versions = []
-                    elif isinstance(compat_package, dict):
-                        package_name = compat_package.get("name")
-                        versions = compat_package.get("versions", [])
-                    else:
-                        continue
-                    
-                    if package_name == target_package:
-                        if versions:
-                            print(f"  - {patch_name}: supports versions {versions}")
-                            patch_details[patch_name] = versions
-                            supports_all_versions = False
-                            for version in versions:
-                                version_support[version] += 1
-                        else:
-                            print(f"  - {patch_name}: supports all versions")
     
     # If all patches support all versions, no need to check compatibility
     if supports_all_versions:

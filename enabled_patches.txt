@@ -1,0 +1,15 @@
+Bypass certificate checks
+Change miniplayer color
+Crossfade
+Disable DRC audio
+Disable QUIC protocol
+Disable dislike redirection
+Downloads
+Enable exclusive audio playback
+Force original audio
+GmsCore support
+Hide ads
+Remove background playback restrictions
+Return YouTube Dislike
+Spoof video streams
+Theme

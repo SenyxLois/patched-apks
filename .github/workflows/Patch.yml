@@ -136,26 +136,41 @@ jobs:
             apkeep -a com.google.android.apps.youtube.music@${{ env.YT_MUSIC_VERSION }} .
           fi
           
-          # Find the downloaded file
-          APK_FILE=$(ls com.google.android.apps.youtube.music*.apk 2>/dev/null || ls com.google.android.apps.youtube.music*.apks 2>/dev/null || ls com.google.android.apps.youtube.music*.apkm 2>/dev/null || echo "")
+          # Find the downloaded file (could be APK, XAPK, APKS, APKM, etc.)
+          APK_FILE=$(ls com.google.android.apps.youtube.music*.apk 2>/dev/null | grep -v "config\." || ls com.google.android.apps.youtube.music* 2>/dev/null | grep -E "\.(xapk|apks|apkm)$" || echo "")
           
           if [ -z "$APK_FILE" ]; then
             echo "ERROR: APK file not found"
             exit 1
           fi
           
-          # Check if it's .apks or .apkm (not supported yet)
-          if [[ "$APK_FILE" == *.apks ]] || [[ "$APK_FILE" == *.apkm ]]; then
-            echo "ERROR: .apks and .apkm formats are under construction"
+          echo "Found file: $APK_FILE"
+          
+          # Check if it's a plain APK or needs merging
+          if [[ "$APK_FILE" == *.apk ]] && [[ ! "$APK_FILE" =~ config ]]; then
+            # Plain APK file, use as-is
+            if [ "$APK_FILE" != "youtube_music.apk" ]; then
+              mv "$APK_FILE" youtube_music.apk
+            fi
+          else
+            # XAPK, APKS, APKM, or other format - use APKEditor to merge
+            echo "Using APKEditor to merge $APK_FILE"
+            java -jar apk-editor.jar m -i "$APK_FILE" -o youtube_music.apk
+            
+            if [ ! -f "youtube_music.apk" ]; then
+              echo "ERROR: APKEditor merge failed"
+              exit 1
+            fi
+          fi
+          
+          # Verify the APK file exists
+          if [ -f "youtube_music.apk" ]; then
+            echo "APK_FILE=youtube_music.apk" >> $GITHUB_ENV
+            echo "Using YouTube Music APK: youtube_music.apk"
+          else
+            echo "ERROR: No suitable APK file found"
             exit 1
           fi
-          
-          # Rename to standard format if needed
-          if [ "$APK_FILE" != "youtube_music.apk" ]; then
-            mv "$APK_FILE" youtube_music.apk
-          fi
-          
-          echo "APK_FILE=youtube_music.apk" >> $GITHUB_ENV
       
       - name: Download Google Photos APK
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}

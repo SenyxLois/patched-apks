@@ -10,6 +10,12 @@ import os
 import sys
 from datetime import datetime
 
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+
 
 def load_version_file(filepath='patch_versions.json'):
     """Load previously stored patch versions"""

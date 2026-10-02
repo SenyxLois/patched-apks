@@ -4,6 +4,12 @@ import os
 import sys
 from collections import defaultdict
 
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+
 
 def load_enabled_patches(filepath='YTMusic-patch.json'):
     try:

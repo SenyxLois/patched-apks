@@ -164,10 +164,10 @@ jobs:
         run: |
           if [ "${{ env.YT_MUSIC_USE_LATEST }}" = "true" ]; then
             echo "Downloading latest YouTube Music APK"
-            apkeep -d apk-pure -i -a com.google.android.apps.youtube.music .
+            apkeep -d apk-pure -a com.google.android.apps.youtube.music .
           else
             echo "Downloading YouTube Music version ${{ env.YT_MUSIC_VERSION }}"
-            apkeep -d apk-pure -i -a com.google.android.apps.youtube.music@${{ env.YT_MUSIC_VERSION }} .
+            apkeep -d apk-pure -a com.google.android.apps.youtube.music@${{ env.YT_MUSIC_VERSION }} .
           fi
           
           # Find the downloaded file (could be APK, XAPK, APKS, APKM, etc.)
@@ -211,10 +211,10 @@ jobs:
         run: |
           if [ "${{ env.GOOGLE_PHOTOS_USE_LATEST }}" = "true" ]; then
             echo "Downloading latest Google Photos APK"
-            apkeep -d apk-pure -i -a com.google.android.apps.photos .
+            apkeep -d apk-pure -a com.google.android.apps.photos .
           else
             echo "Downloading Google Photos version ${{ env.GOOGLE_PHOTOS_VERSION }}"
-            apkeep -d apk-pure -i -a com.google.android.apps.photos@${{ env.GOOGLE_PHOTOS_VERSION }} .
+            apkeep -d apk-pure -a com.google.android.apps.photos@${{ env.GOOGLE_PHOTOS_VERSION }} .
           fi
           
           echo "Downloaded files:"

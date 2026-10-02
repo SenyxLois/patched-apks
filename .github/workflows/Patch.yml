@@ -21,15 +21,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            YTMusic-patch.json
-            GooglePhotos-patch.json
-            ytmversion.py
-            photosversion.py
-            check_patch_updates.py
-            clone_apk.py
-          sparse-checkout-cone-mode: false
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -83,11 +74,11 @@ jobs:
           wget "$PATCHES_URL" -O patches-morphe.mpp
           echo "MORPHE_PATCHES_VERSION=$MORPHE_PATCHES_VERSION" >> $GITHUB_ENV
 
-      - name: Download Google Photos Patches (Fork)
+      - name: Download Google Photos Patches (De-Vanced)
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
-          PHOTOS_PATCHES_URL=$(curl -s https://api.github.com/repos/rushiranpise/morphe-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url')
-          PHOTOS_PATCHES_VERSION=$(curl -s https://api.github.com/repos/rushiranpise/morphe-patches/releases/latest | jq -r '.tag_name' | sed 's/v//')
+          PHOTOS_PATCHES_URL=$(curl -s https://api.github.com/repos/RookieEnough/De-Vanced/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url')
+          PHOTOS_PATCHES_VERSION=$(curl -s https://api.github.com/repos/RookieEnough/De-Vanced/releases/latest | jq -r '.tag_name' | sed 's/v//')
           wget "$PHOTOS_PATCHES_URL" -O patches-photos.mpp
           echo "PHOTOS_PATCHES_VERSION=$PHOTOS_PATCHES_VERSION" >> $GITHUB_ENV
 
@@ -119,22 +110,6 @@ jobs:
             exit 1
           fi
       
-      - name: Create package-rename option files for clone builds
-        if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
-        run: |
-          # Options file for Google Photos "Change package name" patch
-          cat > options-photos-clone.json << EOF
-          [
-            {
-              "patchName": "Change package name",
-              "options": [
-                { "key": "googlePhotosPackageName", "value": "${{ env.PHOTOS_CLONE_PACKAGE }}" },
-                { "key": "packageName", "value": "${{ env.PHOTOS_CLONE_PACKAGE }}" }
-              ]
-            }
-          ]
-          EOF
-          echo "--- options-photos-clone.json ---"; cat options-photos-clone.json
       
       - name: Find compatible YT Music version
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
@@ -293,73 +268,48 @@ jobs:
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           OUTPUT_APK_CLONE="ytmusic_${{ env.YT_MUSIC_VERSION }}_morphe${{ env.MORPHE_PATCHES_VERSION }}_clone.apk"
-          OUTPUT_APK_CLONE_UNSIGNED="ytmusic_clone_unsigned.apk"
-          OUTPUT_APK_CLONE_ALIGNED="ytmusic_clone_aligned.apk"
           
-          echo "Building YouTube Music clone APK using APKEditor..."
-          python3 clone_apk.py \
-            --input "${{ env.OUTPUT_APK }}" \
-            --output "$OUTPUT_APK_CLONE_UNSIGNED" \
-            --old-pkg "com.google.android.apps.youtube.music" \
-            --new-pkg "${{ env.YTMUSIC_CLONE_PACKAGE }}" \
-            --apk-editor "apk-editor.jar"
+          # Create options file specifying the clone package name for "Clone app"
+          cat > options-ytmusic-clone.json << EOF
+          [
+            {
+              "patches": {
+                "Clone app": {
+                  "enabled": true,
+                  "options": {
+                    "packageName": "${{ env.YTMUSIC_CLONE_PACKAGE }}"
+                  }
+                }
+              }
+            }
+          ]
+          EOF
           
-          if [ ! -f "$OUTPUT_APK_CLONE_UNSIGNED" ]; then
-            echo "ERROR: clone_apk.py did not produce an output APK"
-            echo "YTM_CLONE_BUILT=false" >> $GITHUB_ENV
-            exit 1
-          fi
+          # Build patch arguments from enabled_patches.txt
+          PATCH_ARGS=""
+          while IFS= read -r patch; do
+            PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
+          done < enabled_patches.txt
           
-          # Locate zipalign and apksigner
-          ZIPALIGN_BIN=$(which zipalign || find $ANDROID_HOME/build-tools -name zipalign 2>/dev/null | sort -V | tail -n 1)
-          APKSIGNER_BIN=$(which apksigner || find $ANDROID_HOME/build-tools -name apksigner 2>/dev/null | sort -V | tail -n 1)
-          
-          echo "Using zipalign: $ZIPALIGN_BIN"
-          echo "Using apksigner: $APKSIGNER_BIN"
-          
-          "$ZIPALIGN_BIN" -f -p 4 "$OUTPUT_APK_CLONE_UNSIGNED" "$OUTPUT_APK_CLONE_ALIGNED"
-          
-          # Sign using apksigner with keystore type fallback (JKS / PKCS12)
-          SIGNED=false
-          for KSTYPE in JKS PKCS12; do
-            echo "Attempting to sign with keystore type: $KSTYPE..."
-            if "$APKSIGNER_BIN" sign \
-                --ks SenyxPatch.keystore \
-                --ks-type "$KSTYPE" \
-                --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
-                --ks-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
-                --key-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
-                --out "$OUTPUT_APK_CLONE" \
-                "$OUTPUT_APK_CLONE_ALIGNED"; then
-              echo "Successfully signed clone APK with keystore type $KSTYPE"
-              SIGNED=true
-              break
-            fi
-            if "$APKSIGNER_BIN" sign \
-                --ks SenyxPatch.keystore \
-                --ks-type "$KSTYPE" \
-                --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
-                --ks-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
-                --key-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
-                --out "$OUTPUT_APK_CLONE" \
-                "$OUTPUT_APK_CLONE_ALIGNED"; then
-              echo "Successfully signed clone APK with keystore type $KSTYPE (swapped pass)"
-              SIGNED=true
-              break
-            fi
-          done
-          
-          if [ "$SIGNED" != "true" ]; then
-            echo "ERROR: Failed to sign APK with any keystore type"
-            exit 1
-          fi
-          
-          rm -f "$OUTPUT_APK_CLONE_UNSIGNED" "$OUTPUT_APK_CLONE_ALIGNED"
+          echo "Patching YouTube Music clone with package ${{ env.YTMUSIC_CLONE_PACKAGE }}..."
+          eval java -jar morphe-cli.jar patch \
+            -p patches-morphe.mpp \
+            youtube_music.apk \
+            --exclusive \
+            $PATCH_ARGS \
+            -e \"Clone app\" \
+            -O packageName=\"${{ env.YTMUSIC_CLONE_PACKAGE }}\" \
+            --options-file options-ytmusic-clone.json \
+            --keystore SenyxPatch.keystore \
+            --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
+            --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
+            --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
+            -o \"$OUTPUT_APK_CLONE\"
           
           if [ ! -f "$OUTPUT_APK_CLONE" ]; then
-            echo "WARNING: Clone build produced no APK - skipping"
+            echo "ERROR: YouTube Music clone build failed to produce $OUTPUT_APK_CLONE"
             echo "YTM_CLONE_BUILT=false" >> $GITHUB_ENV
-            exit 0
+            exit 1
           fi
           
           echo "YTM_CLONE_BUILT=true" >> $GITHUB_ENV
@@ -394,93 +344,53 @@ jobs:
         run: |
           OUTPUT_PHOTOS_APK_CLONE="photos_${{ env.GOOGLE_PHOTOS_VERSION }}_morphe${{ env.PHOTOS_PATCHES_VERSION }}_clone.apk"
           
-          # Check if patches-photos.mpp has "Change package name"
-          CLONE_PATCH_FOUND=false
-          if java -jar morphe-cli.jar list-patches --patches=patches-photos.mpp | grep -qi "Change package name"; then
-            CLONE_PATCH_FOUND=true
-          fi
-          
-          if [ "$CLONE_PATCH_FOUND" = "true" ]; then
-            echo "Attempting Google Photos clone build via Morphe patch..."
-            PATCH_ARGS=""
-            while IFS= read -r patch; do
-              PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
-            done < enabled_patches_photos.txt
-            
-            eval java -jar morphe-cli.jar patch \
-              -p patches-photos.mpp \
-              google_photos.apk \
-              --exclusive \
-              $PATCH_ARGS \
-              -e \"Change package name\" \
-              --options options-photos-clone.json \
-              --keystore SenyxPatch.keystore \
-              --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
-              --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
-              --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
-              -o \"$OUTPUT_PHOTOS_APK_CLONE\" || true
-          fi
-          
-          # Fallback to APKEditor if Morphe patch did not produce clone APK
-          if [ ! -f "$OUTPUT_PHOTOS_APK_CLONE" ] && [ -f "${{ env.OUTPUT_PHOTOS_APK }}" ]; then
-            echo "Building Google Photos clone via APKEditor fallback..."
-            OUTPUT_PHOTOS_CLONE_UNSIGNED="photos_clone_unsigned.apk"
-            OUTPUT_PHOTOS_CLONE_ALIGNED="photos_clone_aligned.apk"
-            
-            python3 clone_apk.py \
-              --input "${{ env.OUTPUT_PHOTOS_APK }}" \
-              --output "$OUTPUT_PHOTOS_CLONE_UNSIGNED" \
-              --old-pkg "com.google.android.apps.photos" \
-              --new-pkg "${{ env.PHOTOS_CLONE_PACKAGE }}" \
-              --apk-editor "apk-editor.jar"
-            
-            ZIPALIGN_BIN=$(which zipalign || find $ANDROID_HOME/build-tools -name zipalign 2>/dev/null | sort -V | tail -n 1)
-            APKSIGNER_BIN=$(which apksigner || find $ANDROID_HOME/build-tools -name apksigner 2>/dev/null | sort -V | tail -n 1)
-            
-            "$ZIPALIGN_BIN" -f -p 4 "$OUTPUT_PHOTOS_CLONE_UNSIGNED" "$OUTPUT_PHOTOS_CLONE_ALIGNED"
-            
-            # Sign using apksigner with keystore type fallback (JKS / PKCS12)
-            SIGNED=false
-            for KSTYPE in JKS PKCS12; do
-              echo "Attempting to sign with keystore type: $KSTYPE..."
-              if "$APKSIGNER_BIN" sign \
-                  --ks SenyxPatch.keystore \
-                  --ks-type "$KSTYPE" \
-                  --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
-                  --ks-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
-                  --key-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
-                  --out "$OUTPUT_PHOTOS_APK_CLONE" \
-                  "$OUTPUT_PHOTOS_CLONE_ALIGNED"; then
-                echo "Successfully signed clone APK with keystore type $KSTYPE"
-                SIGNED=true
-                break
-              fi
-              if "$APKSIGNER_BIN" sign \
-                  --ks SenyxPatch.keystore \
-                  --ks-type "$KSTYPE" \
-                  --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
-                  --ks-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
-                  --key-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
-                  --out "$OUTPUT_PHOTOS_APK_CLONE" \
-                  "$OUTPUT_PHOTOS_CLONE_ALIGNED"; then
-                echo "Successfully signed clone APK with keystore type $KSTYPE (swapped pass)"
-                SIGNED=true
-                break
-              fi
-            done
-            
-            if [ "$SIGNED" != "true" ]; then
-              echo "ERROR: Failed to sign APK with any keystore type"
-              exit 1
-            fi
-            
-            rm -f "$OUTPUT_PHOTOS_CLONE_UNSIGNED" "$OUTPUT_PHOTOS_CLONE_ALIGNED"
-          fi
-          
-          if [ ! -f "$OUTPUT_PHOTOS_APK_CLONE" ]; then
-            echo "WARNING: Clone build produced no APK - skipping"
+          if [ ! -f "google_photos.apk" ]; then
+            echo "WARNING: No google_photos.apk found - skipping clone build"
             echo "PHOTOS_CLONE_BUILT=false" >> $GITHUB_ENV
             exit 0
+          fi
+          
+          # Create options file specifying the clone package name for "Clone app"
+          cat > options-photos-clone.json << EOF
+          [
+            {
+              "patches": {
+                "Clone app": {
+                  "enabled": true,
+                  "options": {
+                    "packageName": "${{ env.PHOTOS_CLONE_PACKAGE }}"
+                  }
+                }
+              }
+            }
+          ]
+          EOF
+          
+          # Build patch arguments from enabled_patches_photos.txt
+          PATCH_ARGS=""
+          while IFS= read -r patch; do
+            PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
+          done < enabled_patches_photos.txt
+          
+          echo "Patching Google Photos clone with package ${{ env.PHOTOS_CLONE_PACKAGE }}..."
+          eval java -jar morphe-cli.jar patch \
+            -p patches-photos.mpp \
+            google_photos.apk \
+            --exclusive \
+            $PATCH_ARGS \
+            -e \"Clone app\" \
+            -O packageName=\"${{ env.PHOTOS_CLONE_PACKAGE }}\" \
+            --options-file options-photos-clone.json \
+            --keystore SenyxPatch.keystore \
+            --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
+            --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
+            --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
+            -o \"$OUTPUT_PHOTOS_APK_CLONE\"
+          
+          if [ ! -f "$OUTPUT_PHOTOS_APK_CLONE" ]; then
+            echo "ERROR: Google Photos clone build failed to produce $OUTPUT_PHOTOS_APK_CLONE"
+            echo "PHOTOS_CLONE_BUILT=false" >> $GITHUB_ENV
+            exit 1
           fi
           
           echo "PHOTOS_CLONE_BUILT=true" >> $GITHUB_ENV
@@ -531,11 +441,13 @@ jobs:
 
             - **YT Music Version:** ${{ env.YT_MUSIC_VERSION }}
             - **Morphe Patch Version:** ${{ env.MORPHE_PATCHES_VERSION }}
+            - **Standard package:** `app.morphe.android.apps.youtube.music` (MicroG / GmsCore support)
             - **Clone variant:** installs alongside the real app (package `${{ env.YTMUSIC_CLONE_PACKAGE }}`) — the file ending in `_clone.apk`
 
             ### <img width="25" height="25" alt="image" src="https://raw.githubusercontent.com/SenyxLois/patched-apks/refs/heads/main/icon/gphotoicon.png" /> Google Photos [ Morphe ]
             - **Google Photos Version:** ${{ env.GOOGLE_PHOTOS_VERSION }}
             - **Google Photos Patch version:** ${{ env.PHOTOS_PATCHES_VERSION }}
+            - **Standard package:** `app.morphe.android.apps.photos` (MicroG / GmsCore support + Pixel unlimited storage)
             - **Clone variant:** installs alongside the real app (package `${{ env.PHOTOS_CLONE_PACKAGE }}`) — the file ending in `_clone.apk`
 
             ## 🛠️ Tool Used 

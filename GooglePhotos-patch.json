@@ -1,7 +1,6 @@
 [
-    "AMOLED dark theme",
     "Enable DCIM folders backup control",
-    "Fix DCIM folder classification",
+    "Fix selected account persistence",
     "GmsCore support",
     "Spoof features"
 ]

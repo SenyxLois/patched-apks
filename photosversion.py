@@ -16,12 +16,6 @@ def load_enabled_patches(filepath='GooglePhotos-patch.json'):
         with open(filepath, 'r') as f:
             data = json.load(f)
         
-        # Universal patches that apply to all packages, ignore them for version compatibility
-        universal_patches = {
-            "GmsCore support",
-            "Spoof features",
-        }
-        
         # Handle different formats
         enabled_patch_names = []
         
@@ -29,22 +23,21 @@ def load_enabled_patches(filepath='GooglePhotos-patch.json'):
             # Check if it's a list of strings or objects
             if data and isinstance(data[0], str):
                 # List of patch names
-                enabled_patch_names = [p for p in data if p not in universal_patches]
-                print(f"Loaded {len(enabled_patch_names)} patch names from {filepath} (ignoring {len([p for p in data if p in universal_patches])} universal patches)")
+                enabled_patch_names = list(data)
+                print(f"Loaded {len(enabled_patch_names)} patch names from {filepath}")
             elif data and isinstance(data[0], dict):
                 # List of patch objects
                 for patch in data:
                     if patch.get("use", False):
                         patch_name = patch.get("name")
-                        if patch_name not in universal_patches:
-                            compat_packages = patch.get("compatiblePackages", {})
-                            # Check if this patch supports Google Photos
-                            if "com.google.android.apps.photos" in compat_packages:
-                                enabled_patch_names.append(patch_name)
+                        compat_packages = patch.get("compatiblePackages", {})
+                        # Check if this patch supports Google Photos
+                        if "com.google.android.apps.photos" in compat_packages:
+                            enabled_patch_names.append(patch_name)
                 print(f"Loaded {len(enabled_patch_names)} enabled Google Photos patches from {filepath}")
         elif isinstance(data, dict):
             # Might be a dict with patch names as keys
-            enabled_patch_names = [k for k in data.keys() if k not in universal_patches]
+            enabled_patch_names = list(data.keys())
             print(f"Loaded {len(enabled_patch_names)} patch names from {filepath}")
         
         if not enabled_patch_names:
@@ -60,22 +53,31 @@ def load_enabled_patches(filepath='GooglePhotos-patch.json'):
         sys.exit(1)
 
 
-def fetch_patches_data(url="https://github.com/rushiranpise/morphe-patches/releases/latest/download/patches-list.json"):
-    try:
-        print(f"Fetching Morphe (Google Photos fork) patches data from {url}")
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        # Morphe format: {"patches": [...], "version": "..."}
-        if isinstance(data, dict) and "patches" in data:
-            return data["patches"]
-        return data
-    except requests.RequestException as e:
-        print(f"ERROR: Failed to fetch patches data: {e}")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"ERROR: Invalid JSON in patches data: {e}")
-        sys.exit(1)
+def fetch_patches_data(url=None):
+    urls = [
+        "https://raw.githubusercontent.com/RookieEnough/De-Vanced/refs/heads/main/patches-list.json",
+        "https://github.com/RookieEnough/De-Vanced/releases/latest/download/patches-list.json",
+    ]
+    if url:
+        urls.insert(0, url)
+    
+    last_error = None
+    for u in urls:
+        try:
+            print(f"Fetching De-Vanced patches data from {u}")
+            response = requests.get(u, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            if isinstance(data, dict) and "patches" in data:
+                return data["patches"]
+            return data
+        except Exception as e:
+            last_error = e
+            print(f"  Warning: failed to fetch from {u}: {e}")
+            continue
+
+    print(f"ERROR: Failed to fetch patches data: {last_error}")
+    sys.exit(1)
 
 
 def find_compatible_version(patches_data, enabled_patches, target_package="com.google.android.apps.photos"):

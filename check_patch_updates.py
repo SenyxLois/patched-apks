@@ -97,9 +97,9 @@ def check_for_updates(current_versions):
     new_versions['morphe_patches_version'] = morphe_version
     new_versions['morphe_patches_updated'] = morphe_latest['published_at']
     
-    # Check Google Photos Patches (rushiranpise fork)
-    print("\n[2/3] Checking Google Photos Patches (rushiranpise fork)...")
-    photos_latest = fetch_latest_release_version("rushiranpise/morphe-patches")
+    # Check Google Photos Patches (De-Vanced)
+    print("\n[2/3] Checking Google Photos Patches (De-Vanced)...")
+    photos_latest = fetch_latest_release_version("RookieEnough/De-Vanced")
     photos_version = photos_latest['version']
     
     if current_versions['photos_patches_version'] is None:

@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
 
+env:
+  # Custom package names for the clone builds (install alongside the real Google apps)
+  YTMUSIC_CLONE_PACKAGE: com.senyx.android.apps.youtube.music
+  PHOTOS_CLONE_PACKAGE: com.senyx.android.apps.photos
+
 jobs:
   Patch-apps:
     environment: SECRET_ENV
@@ -112,6 +117,35 @@ jobs:
             echo "ERROR: Keystore file is too small ($KEYSTORE_SIZE bytes). Possible download issue."
             exit 1
           fi
+      
+      - name: Create package-rename option files for clone builds
+        if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          # Options file telling the "Change package name" patch which package name to use.
+          # Verify the exact patch name/option key with:
+          #   java -jar morphe-cli.jar list-patches patches-morphe.mpp --with-options
+          cat > options-ytmusic-clone.json << EOF
+          [
+            {
+              "patchName": "Change package name",
+              "options": [
+                { "key": "packageName", "value": "${{ env.YTMUSIC_CLONE_PACKAGE }}" }
+              ]
+            }
+          ]
+          EOF
+          cat > options-photos-clone.json << EOF
+          [
+            {
+              "patchName": "Change package name",
+              "options": [
+                { "key": "packageName", "value": "${{ env.PHOTOS_CLONE_PACKAGE }}" }
+              ]
+            }
+          ]
+          EOF
+          echo "--- options-ytmusic-clone.json ---"; cat options-ytmusic-clone.json
+          echo "--- options-photos-clone.json ---"; cat options-photos-clone.json
       
       - name: Find compatible YT Music version
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
@@ -266,6 +300,46 @@ jobs:
           
           echo "OUTPUT_APK=$OUTPUT_APK" >> $GITHUB_ENV
 
+      - name: Patch YouTube Music APK (clone package)
+        if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          OUTPUT_APK_CLONE="ytmusic_${{ env.YT_MUSIC_VERSION }}_morphe${{ env.MORPHE_PATCHES_VERSION }}_clone.apk"
+          
+          # Only build the clone if this patch bundle actually has a package-rename patch
+          if ! java -jar morphe-cli.jar list-patches patches-morphe.mpp | grep -qi "Change package name"; then
+            echo "WARNING: 'Change package name' patch not found in patches-morphe.mpp - skipping clone build"
+            echo "YTM_CLONE_BUILT=false" >> $GITHUB_ENV
+            exit 0
+          fi
+          
+          # Build patch arguments properly, plus the package-rename patch
+          PATCH_ARGS=""
+          while IFS= read -r patch; do
+            PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
+          done < enabled_patches.txt
+          
+          eval java -jar morphe-cli.jar patch \
+            -p patches-morphe.mpp \
+            youtube_music.apk \
+            --exclusive \
+            $PATCH_ARGS \
+            -e \"Change package name\" \
+            --options options-ytmusic-clone.json \
+            --keystore SenyxPatch.keystore \
+            --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
+            --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
+            --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
+            -o \"$OUTPUT_APK_CLONE\"
+          
+          if [ ! -f "$OUTPUT_APK_CLONE" ]; then
+            echo "WARNING: Clone build produced no APK - skipping"
+            echo "YTM_CLONE_BUILT=false" >> $GITHUB_ENV
+            exit 0
+          fi
+          
+          echo "YTM_CLONE_BUILT=true" >> $GITHUB_ENV
+          echo "OUTPUT_APK_CLONE=$OUTPUT_APK_CLONE" >> $GITHUB_ENV
+
       - name: Patch Google Photos APK
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
@@ -290,6 +364,46 @@ jobs:
           
           echo "OUTPUT_PHOTOS_APK=$OUTPUT_PHOTOS_APK" >> $GITHUB_ENV
 
+      - name: Patch Google Photos APK (clone package)
+        if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          OUTPUT_PHOTOS_APK_CLONE="photos_${{ env.GOOGLE_PHOTOS_VERSION }}_morphe${{ env.PHOTOS_PATCHES_VERSION }}_clone.apk"
+          
+          # Only build the clone if this patch bundle actually has a package-rename patch
+          if ! java -jar morphe-cli.jar list-patches patches-photos.mpp | grep -qi "Change package name"; then
+            echo "WARNING: 'Change package name' patch not found in patches-photos.mpp - skipping clone build"
+            echo "PHOTOS_CLONE_BUILT=false" >> $GITHUB_ENV
+            exit 0
+          fi
+          
+          # Build patch arguments properly, plus the package-rename patch
+          PATCH_ARGS=""
+          while IFS= read -r patch; do
+            PATCH_ARGS="$PATCH_ARGS -e \"$patch\""
+          done < enabled_patches_photos.txt
+          
+          eval java -jar morphe-cli.jar patch \
+            -p patches-photos.mpp \
+            google_photos.apk \
+            --exclusive \
+            $PATCH_ARGS \
+            -e \"Change package name\" \
+            --options options-photos-clone.json \
+            --keystore SenyxPatch.keystore \
+            --keystore-entry-alias \"${{ secrets.KEYSTORE_ALIAS }}\" \
+            --keystore-entry-password \"${{ secrets.KEYSTORE_PASS }}\" \
+            --keystore-password \"${{ secrets.KEYSTORE_PASS2 }}\" \
+            -o \"$OUTPUT_PHOTOS_APK_CLONE\"
+          
+          if [ ! -f "$OUTPUT_PHOTOS_APK_CLONE" ]; then
+            echo "WARNING: Clone build produced no APK - skipping"
+            echo "PHOTOS_CLONE_BUILT=false" >> $GITHUB_ENV
+            exit 0
+          fi
+          
+          echo "PHOTOS_CLONE_BUILT=true" >> $GITHUB_ENV
+          echo "OUTPUT_PHOTOS_APK_CLONE=$OUTPUT_PHOTOS_APK_CLONE" >> $GITHUB_ENV
+
       - name: Get Tool Versions
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
@@ -301,6 +415,22 @@ jobs:
           
           # APKEditor is not used in this workflow, set as N/A
           echo "APKEDITOR_VERSION=N/A" >> $GITHUB_ENV
+
+      - name: Build release file list
+        if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          FILES="${{ env.OUTPUT_APK }}"$'\n'"${{ env.OUTPUT_PHOTOS_APK }}"
+          if [ "${{ env.YTM_CLONE_BUILT }}" = "true" ] && [ -n "${{ env.OUTPUT_APK_CLONE }}" ]; then
+            FILES="$FILES"$'\n'"${{ env.OUTPUT_APK_CLONE }}"
+          fi
+          if [ "${{ env.PHOTOS_CLONE_BUILT }}" = "true" ] && [ -n "${{ env.OUTPUT_PHOTOS_APK_CLONE }}" ]; then
+            FILES="$FILES"$'\n'"${{ env.OUTPUT_PHOTOS_APK_CLONE }}"
+          fi
+          echo "Release files:"
+          echo "$FILES"
+          echo "RELEASE_FILES<<EOF" >> $GITHUB_ENV
+          echo "$FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Create Release
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
@@ -318,19 +448,19 @@ jobs:
 
             - **YT Music Version:** ${{ env.YT_MUSIC_VERSION }}
             - **Morphe Patch Version:** ${{ env.MORPHE_PATCHES_VERSION }}
+            - **Clone variant:** installs alongside the real app (package `${{ env.YTMUSIC_CLONE_PACKAGE }}`) — the file ending in `_clone.apk`
 
             ### <img width="25" height="25" alt="image" src="https://raw.githubusercontent.com/SenyxLois/patched-apks/refs/heads/main/icon/gphotoicon.png" /> Google Photos [ Morphe ]
             - **Google Photos Version:** ${{ env.GOOGLE_PHOTOS_VERSION }}
             - **Google Photos Patch version:** ${{ env.PHOTOS_PATCHES_VERSION }}
+            - **Clone variant:** installs alongside the real app (package `${{ env.PHOTOS_CLONE_PACKAGE }}`) — the file ending in `_clone.apk`
 
             ## 🛠️ Tool Used 
             - **Morphe CLI:** ${{ env.CLI_VERSION }}
             - **Apkeep :** ${{ env.APKEEP_VERSION }}
             - **Build Date:** ${{ env.BUILD_DATE }}
 
-          files: |
-            ${{ env.OUTPUT_APK }}
-            ${{ env.OUTPUT_PHOTOS_APK }}
+          files: ${{ env.RELEASE_FILES }}
           draft: false
           prerelease: false
         env:

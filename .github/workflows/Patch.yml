@@ -402,11 +402,11 @@ jobs:
           echo "BUILD_DATE=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
           echo "TAG_NAME=morphe-${{ env.MORPHE_PATCHES_VERSION }}_photos-${{ env.PHOTOS_PATCHES_VERSION }}" >> $GITHUB_ENV
           # Get Apkeep version
-          APKEEP_VERSION=$(apkeep --version 2>&1 | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
+          APKEEP_VERSION=$(apkeep --version 2>&1 | grep -oP '\d+\.\d+\.\d+' | head -n 1 || echo "unknown")
           echo "APKEEP_VERSION=$APKEEP_VERSION" >> $GITHUB_ENV
           
           # Get APKEditor version
-          APKEDITOR_VERSION=$(java -jar apk-editor.jar -v 2>&1 | grep -oP '\d+\.\d+\.\d+' || echo "1.4.9")
+          APKEDITOR_VERSION=$(java -jar apk-editor.jar -v 2>&1 | grep -oP '\d+\.\d+\.\d+' | head -n 1 || echo "1.4.9")
           echo "APKEDITOR_VERSION=$APKEDITOR_VERSION" >> $GITHUB_ENV
 
       - name: Build release file list

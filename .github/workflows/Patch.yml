@@ -45,7 +45,7 @@ jobs:
       
       - name: Set up Java
         if: ${{ env.UPDATES_AVAILABLE == 'true' || github.event_name == 'workflow_dispatch' }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -319,13 +319,40 @@ jobs:
           
           "$ZIPALIGN_BIN" -f -p 4 "$OUTPUT_APK_CLONE_UNSIGNED" "$OUTPUT_APK_CLONE_ALIGNED"
           
-          "$APKSIGNER_BIN" sign \
-            --ks SenyxPatch.keystore \
-            --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
-            --ks-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
-            --key-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
-            --out "$OUTPUT_APK_CLONE" \
-            "$OUTPUT_APK_CLONE_ALIGNED"
+          # Sign using apksigner with keystore type fallback (JKS / PKCS12)
+          SIGNED=false
+          for KSTYPE in JKS PKCS12; do
+            echo "Attempting to sign with keystore type: $KSTYPE..."
+            if "$APKSIGNER_BIN" sign \
+                --ks SenyxPatch.keystore \
+                --ks-type "$KSTYPE" \
+                --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
+                --ks-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
+                --key-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
+                --out "$OUTPUT_APK_CLONE" \
+                "$OUTPUT_APK_CLONE_ALIGNED"; then
+              echo "Successfully signed clone APK with keystore type $KSTYPE"
+              SIGNED=true
+              break
+            fi
+            if "$APKSIGNER_BIN" sign \
+                --ks SenyxPatch.keystore \
+                --ks-type "$KSTYPE" \
+                --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
+                --ks-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
+                --key-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
+                --out "$OUTPUT_APK_CLONE" \
+                "$OUTPUT_APK_CLONE_ALIGNED"; then
+              echo "Successfully signed clone APK with keystore type $KSTYPE (swapped pass)"
+              SIGNED=true
+              break
+            fi
+          done
+          
+          if [ "$SIGNED" != "true" ]; then
+            echo "ERROR: Failed to sign APK with any keystore type"
+            exit 1
+          fi
           
           rm -f "$OUTPUT_APK_CLONE_UNSIGNED" "$OUTPUT_APK_CLONE_ALIGNED"
           
@@ -411,13 +438,41 @@ jobs:
             APKSIGNER_BIN=$(which apksigner || find $ANDROID_HOME/build-tools -name apksigner 2>/dev/null | sort -V | tail -n 1)
             
             "$ZIPALIGN_BIN" -f -p 4 "$OUTPUT_PHOTOS_CLONE_UNSIGNED" "$OUTPUT_PHOTOS_CLONE_ALIGNED"
-            "$APKSIGNER_BIN" sign \
-              --ks SenyxPatch.keystore \
-              --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
-              --ks-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
-              --key-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
-              --out "$OUTPUT_PHOTOS_APK_CLONE" \
-              "$OUTPUT_PHOTOS_CLONE_ALIGNED"
+            
+            # Sign using apksigner with keystore type fallback (JKS / PKCS12)
+            SIGNED=false
+            for KSTYPE in JKS PKCS12; do
+              echo "Attempting to sign with keystore type: $KSTYPE..."
+              if "$APKSIGNER_BIN" sign \
+                  --ks SenyxPatch.keystore \
+                  --ks-type "$KSTYPE" \
+                  --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
+                  --ks-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
+                  --key-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
+                  --out "$OUTPUT_PHOTOS_APK_CLONE" \
+                  "$OUTPUT_PHOTOS_CLONE_ALIGNED"; then
+                echo "Successfully signed clone APK with keystore type $KSTYPE"
+                SIGNED=true
+                break
+              fi
+              if "$APKSIGNER_BIN" sign \
+                  --ks SenyxPatch.keystore \
+                  --ks-type "$KSTYPE" \
+                  --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
+                  --ks-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
+                  --key-pass "pass:${{ secrets.KEYSTORE_PASS2 }}" \
+                  --out "$OUTPUT_PHOTOS_APK_CLONE" \
+                  "$OUTPUT_PHOTOS_CLONE_ALIGNED"; then
+                echo "Successfully signed clone APK with keystore type $KSTYPE (swapped pass)"
+                SIGNED=true
+                break
+              fi
+            done
+            
+            if [ "$SIGNED" != "true" ]; then
+              echo "ERROR: Failed to sign APK with any keystore type"
+              exit 1
+            fi
             
             rm -f "$OUTPUT_PHOTOS_CLONE_UNSIGNED" "$OUTPUT_PHOTOS_CLONE_ALIGNED"
           fi

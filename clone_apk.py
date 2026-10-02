@@ -42,29 +42,26 @@ def modify_manifest(manifest_path, old_pkg, new_pkg):
     with open(manifest_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # 1. Update manifest package attribute
-    content, count = re.subn(
-        r'package="' + re.escape(old_pkg) + r'"',
+    # 1. Update manifest package attribute (supports both ' and " quotes)
+    content = re.sub(
+        r'package=([\'"])' + re.escape(old_pkg) + r'\1',
         f'package="{new_pkg}"',
         content,
         count=1
     )
-    if count == 0:
-        print(f"[clone_apk] WARNING: Manifest package=\"{old_pkg}\" not matched, checking regex without quotes...")
-        content = re.sub(r'package=([\'"])' + re.escape(old_pkg) + r'\1', f'package="{new_pkg}"', content, count=1)
 
     # 2. Update provider authorities
     def replace_authorities(m):
         return m.group(0).replace(old_pkg, new_pkg)
-    content = re.sub(r'android:authorities="[^"]*"', replace_authorities, content)
+    content = re.sub(r'android:authorities=([\'"])[^\'"]*\1', replace_authorities, content)
 
     # 3. Update custom permission declarations and uses-permissions
     def replace_permissions(m):
         return m.group(0).replace(old_pkg, new_pkg)
-    content = re.sub(r'(<(?:uses-)?permission[^>]*android:name=")[^"]*(")', replace_permissions, content)
+    content = re.sub(r'(<(?:uses-)?permission[^>]*android:name=([\'"]))[^\'"]*(\2)', replace_permissions, content)
 
     # 4. Update custom broadcast action names
-    content = re.sub(r'(<action[^>]*android:name=")' + re.escape(old_pkg), r'\1' + new_pkg, content)
+    content = re.sub(r'(<action[^>]*android:name=([\'"]))' + re.escape(old_pkg), r'\1' + new_pkg, content)
 
     # 5. Fix any relative class names (e.g. android:name=".SomeActivity") so Android
     # does not prepend the new package name when resolving classes in DEX.
